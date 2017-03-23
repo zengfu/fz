@@ -1,9 +1,98 @@
 #include "fzshelllib.h"
 #include "string.h"
+#include "stdlib.h"
+
+#define ARGV_MAX_SIZE 10
+
+
 
 extern fzshellTypeDef fzshell;
 static void line_remove(uint8_t* dest,uint8_t* src,uint16_t l);
 static void line_add(uint8_t* dest,uint8_t data,uint16_t l);
+static uint8_t splite(uint8_t *cmd,uint16_t length,uint8_t* argv[ARGV_MAX_SIZE]);
+
+int caculate(uint8_t* data);
+
+void fz_exec(uint8_t* cmd,uint16_t length)
+{
+  //reduce the the first spapce
+  uint8_t* argv[ARGV_MAX_SIZE];
+  uint8_t argc;
+  argc=splite(cmd,length,argv);
+  //test
+  if(argc==2)
+  {
+    if(!strcmp("math",argv[0]))
+    {
+      int result;
+      result=caculate(argv[1]);
+      printf("result:%d\r\n",result);
+    }
+  }
+  
+}
+
+uint8_t lable[10];
+int num[10];
+
+int _caculate(int* num,uint8_t len,uint8_t* label)
+{
+  int16_t result;
+  for(int i=len-2;i>=0;i--)
+  {
+    int tmp=0;
+    if(label[i]=='*'||label[i]=='/')
+    {
+      if(label[i]=='*')
+      {
+        tmp=num[i]*num[i+1];
+      }
+      else if(lable[i]=='/')
+      {
+        tmp=num[i]/num[i+1];
+      }
+      label[i]='+';
+      num[i]=tmp;
+      num[i+1]=0;  
+    }
+  }
+  result=num[0];
+  for(int j=0;j<len-1;j++)
+  {
+    if(lable[j]=='+')
+      result+=num[j+1];
+    else if(lable[j]=='-')
+      result-=num[j+1];
+  }
+  
+  return result;
+  
+}
+int caculate(uint8_t* data)
+{
+  
+  uint16_t len=strlen(data);
+  uint16_t cnt=0;
+  uint16_t index=0;
+  for(int i=0;i<len;i++)
+  {
+    if(data[i]>0x39||data[i]<0x30)
+    {
+      lable[cnt]=data[i];
+      data[i]='\0';
+      num[cnt]=atoi(data+index);
+      cnt++;
+      index=i+1; 
+    }
+  }
+  num[cnt++]=atoi(data+index);
+  //caculate
+  return _caculate(num,cnt,lable);
+}
+
+
+
+
 void fzshell_thread()
 {
   fzshellTypeDef* shell;
@@ -73,11 +162,19 @@ void fzshell_thread()
     // enter 
     if(ch=='\r'||ch=='\n')
     {
-      //exec_cmd
       printf("\r\n");
+      fz_exec(shell->line,shell->line_position);
+      //exec_cmd
+      
       printf("%s>>","fz_shell");
       memset(shell->line,0,shell->line_position);
       shell->line_curpos = shell->line_position = 0;
+      continue;
+    }
+    //tab
+    if(ch=='\t')
+    {
+      //auto complete
       continue;
     }
     //back
@@ -153,7 +250,41 @@ static void line_add(uint8_t* dest,uint8_t data,uint16_t l)
   {
     *tmp--=*dest--;          
   }
-  *(dest+1)=data;
+  *(dest+1)=data;  
+}
+static uint8_t splite(uint8_t *cmd,uint16_t length,uint8_t* argv[ARGV_MAX_SIZE])
+{
+  uint8_t argc=0;
+  /*
+  * argc >=1
+  * ls -s -a
+  * argc=3 argv[0]=ls argv[1]=-s argv[2]=-a
+  */
   
+  uint8_t* index=cmd;
+  uint16_t position=0;
+  
+  while(position<length)
+  {
+    //replace the space to '\0'
+    while((*index == ' ' || *index == '\t') && position < length)
+    {
+      *index='\0';
+      index++;
+      position++;
+    }
+    if(position<length)
+    {
+      argv[argc]=index;
+      argc++;
+    }
+    while((*index != ' ') && position < length)
+    {
+      index++;
+      position++;
+    }
+   
+  }
+  return argc;
 }
 
